@@ -17,7 +17,7 @@
 		$do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
 
 		if ($do == 'Manage') {
-            echo'wellcome'
+            echo'wellcome';
 
 
 		} elseif ($do == 'Add') {
