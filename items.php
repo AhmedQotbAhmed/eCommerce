@@ -17,6 +17,10 @@
 		$do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
 
 		if ($do == 'Manage') {
+<<<<<<< HEAD
+=======
+            echo'wellcome';
+>>>>>>> cf27bb8aa635b6cc5e01ae0925e6e5faad0fc013
 
 
 			$stmt = $con->prepare("SELECT 
