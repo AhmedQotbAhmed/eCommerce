@@ -13,13 +13,98 @@
 	if (isset($_SESSION['Username'])) {
 
 		include 'init.php';
- 
+
 		$do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
 
 		if ($do == 'Manage') {
-			
-            echo'wellcome';
 
+
+			$stmt = $con->prepare("SELECT 
+										items.*, 
+										categories.Name AS category_name, 
+										users.Username 
+									FROM 
+										items
+									INNER JOIN 
+										categories 
+									ON 
+										categories.ID = items.Cat_ID 
+									INNER JOIN 
+										users 
+									ON 
+										users.UserID = items.Member_ID
+									ORDER BY 
+										Item_ID DESC");
+
+			// Execute The Statement
+
+			$stmt->execute();
+
+			// Assign To Variable 
+
+			$items = $stmt->fetchAll();
+
+			if (! empty($items)) {
+
+			?>
+
+<h1 class="text-center">Manage Items</h1>
+<div class="container">
+    <div class="table-responsive">
+        <table class="main-table text-center table table-bordered">
+            <tr>
+                <td>#ID</td>
+                <td>Item Name</td>
+                <td>Description</td>
+                <td>Price</td>
+                <td>Adding Date</td>
+                <td>Category</td>
+                <td>Username</td>
+                <td>Control</td>
+            </tr>
+            <?php
+							foreach($items as $item) {
+								echo "<tr>";
+									echo "<td>" . $item['Item_ID'] . "</td>";
+									echo "<td>" . $item['Name'] . "</td>";
+									echo "<td>" . $item['Description'] . "</td>";
+									echo "<td>" . $item['Price'] . "</td>";
+									echo "<td>" . $item['Add_Date'] ."</td>";
+									echo "<td>" . $item['category_name'] ."</td>";
+									echo "<td>" . $item['Username'] ."</td>";
+									echo "<td>
+										<a href='items.php?do=Edit&itemid=" . $item['Item_ID'] . "' class='btn btn-success'><i class='fa fa-edit'></i> Edit</a>
+										<a href='items.php?do=Delete&itemid=" . $item['Item_ID'] . "' class='btn btn-danger confirm'><i class='fa fa-close'></i> Delete </a>";
+										if ($item['Approve'] == 0) {
+											echo "<a 
+													href='items.php?do=Approve&itemid=" . $item['Item_ID'] . "' 
+													class='btn btn-info activate'>
+													<i class='fa fa-check'></i> Approve</a>";
+										}
+									echo "</td>";
+								echo "</tr>";
+							}
+						?>
+            <tr>
+        </table>
+    </div>
+    <a href="items.php?do=Add" class="btn btn-sm btn-primary">
+        <i class="fa fa-plus"></i> New Item
+    </a>
+</div>
+
+<?php } else {
+
+				echo '<div class="container">';
+					echo '<div class="nice-message">There\'s No Items To Show</div>';
+					echo '<a href="items.php?do=Add" class="btn btn-sm btn-primary">
+							<i class="fa fa-plus"></i> New Item
+						</a>';
+				echo '</div>';
+
+			} ?>
+
+<?php 
 
 		} elseif ($do == 'Add') { ?>
 
@@ -132,7 +217,8 @@
 
 <?php
 
-		} elseif ($do == 'Insert') {
+		}
+		 elseif ($do == 'Insert') {
 
 			if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
@@ -235,10 +321,6 @@
 
 			echo "</div>";
  
-
-		} elseif ($do == 'Insert') {
-			
-
 
 		} elseif ($do == 'Edit') {
 
