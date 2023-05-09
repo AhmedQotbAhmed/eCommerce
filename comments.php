@@ -162,7 +162,7 @@
 
 			}
 
-		} elseif ($do == 'Update') { // Update Page
+		} elseif ($do == 'Update') {
 
 			echo "<h1 class='text-center'>Update Comment</h1>";
 			echo "<div class='container'>";
@@ -198,8 +198,77 @@
         }
          elseif ($do == 'Delete') {
 
+	echo "<h1 class='text-center'>Delete Comment</h1>";
+
+			echo "<div class='container'>";
+
+				// Check If Get Request comid Is Numeric & Get The Integer Value Of It
+
+				$comid = isset($_GET['comid']) && is_numeric($_GET['comid']) ? intval($_GET['comid']) : 0;
+
+				// Select All Data Depend On This ID
+
+				$check = checkItem('c_id', 'comments', $comid);
+
+				// If There's Such ID Show The Form
+
+				if ($check > 0) {
+
+					$stmt = $con->prepare("DELETE FROM comments WHERE c_id = :zid");
+
+					$stmt->bindParam(":zid", $comid);
+
+					$stmt->execute();
+
+					$theMsg = "<div class='alert alert-success'>" . $stmt->rowCount() . ' Record Deleted</div>';
+
+					redirectHome($theMsg, 'back');
+
+				} else {
+
+					$theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>';
+
+					redirectHome($theMsg);
+
+				}
+
+			echo '</div>';
+
 
 		} elseif ($do == 'Activate') {
+
+			echo "<h1 class='text-center'>Approve Comment</h1>";
+			echo "<div class='container'>";
+
+				// Check If Get Request comid Is Numeric & Get The Integer Value Of It
+
+				$comid = isset($_GET['comid']) && is_numeric($_GET['comid']) ? intval($_GET['comid']) : 0;
+
+				// Select All Data Depend On This ID
+
+				$check = checkItem('c_id', 'comments', $comid);
+
+				// If There's Such ID Show The Form
+
+				if ($check > 0) {
+
+					$stmt = $con->prepare("UPDATE comments SET status = 1 WHERE c_id = ?");
+
+					$stmt->execute(array($comid));
+
+					$theMsg = "<div class='alert alert-success'>" . $stmt->rowCount() . ' Record Approved</div>';
+
+					redirectHome($theMsg, 'back');
+
+				} else {
+
+					$theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>';
+
+					redirectHome($theMsg);
+
+				}
+
+			echo '</div>';
 
 
 		}
