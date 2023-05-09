@@ -485,6 +485,8 @@
 
 					$rows = $stmt->fetchAll();
 
+					
+
 					if (! empty($rows)) {
 						
 					?>
@@ -538,14 +540,175 @@
 
 			}		
 
+
 		} elseif ($do == 'Update') {
 
+			echo "<h1 class='text-center'>Update Item</h1>";
+			echo "<div class='container'>";
+
+			if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+
+				// Get Variables From The Form
+
+				$id 		= $_POST['itemid'];
+				$name 		= $_POST['name'];
+				$desc 		= $_POST['description'];
+				$price 		= $_POST['price'];
+				$country	= $_POST['country'];
+				$status 	= $_POST['status'];
+				$cat 		= $_POST['category'];
+				$member 	= $_POST['member'];
+				$tags 		= $_POST['tags'];
+
+				// Validate The Form
+
+				$formErrors = array();
+
+				if (empty($name)) {
+					$formErrors[] = 'Name Can\'t be <strong>Empty</strong>';
+				}
+
+				if (empty($desc)) {
+					$formErrors[] = 'Description Can\'t be <strong>Empty</strong>';
+				}
+
+				if (empty($price)) {
+					$formErrors[] = 'Price Can\'t be <strong>Empty</strong>';
+				}
+
+				if (empty($country)) {
+					$formErrors[] = 'Country Can\'t be <strong>Empty</strong>';
+				}
+
+				if ($status == 0) {
+					$formErrors[] = 'You Must Choose the <strong>Status</strong>';
+				}
+
+				if ($member == 0) {
+					$formErrors[] = 'You Must Choose the <strong>Member</strong>';
+				}
+
+				if ($cat == 0) {
+					$formErrors[] = 'You Must Choose the <strong>Category</strong>';
+				}
+
+				// Loop Into Errors Array And Echo It
+
+				foreach($formErrors as $error) {
+					echo '<div class="alert alert-danger">' . $error . '</div>';
+				}
+
+				// Check If There's No Error Proceed The Update Operation
+
+				if (empty($formErrors)) {
+
+					// Update The Database With This Info
+
+					$stmt = $con->prepare("UPDATE 
+												items 
+											SET 
+												Name = ?, 
+												Description = ?, 
+												Price = ?, 
+												Country_Made = ?,
+												Status = ?,
+												Cat_ID = ?,
+												Member_ID = ?,
+												tags = ?
+											WHERE 
+												Item_ID = ?");
+
+					$stmt->execute(array($name, $desc, $price, $country, $status, $cat, $member, $tags, $id));
+
+					// Echo Success Message
+
+					$theMsg = "<div class='alert alert-success'>" . $stmt->rowCount() . ' Record Updated</div>';
+
+					redirectHome($theMsg, 'back');
+
+				}
+
+			} else {
+
+				$theMsg = '<div class="alert alert-danger">Sorry You Cant Browse This Page Directly</div>';
+
+				redirectHome($theMsg);
+
+			}
+
+			echo "</div>";
 
 		} elseif ($do == 'Delete') {
 
+			echo "<h1 class='text-center'>Delete Item</h1>";
+			echo "<div class='container'>";
+
+				// Check If Get Request Item ID Is Numeric & Get The Integer Value Of It
+
+				$itemid = isset($_GET['itemid']) && is_numeric($_GET['itemid']) ? intval($_GET['itemid']) : 0;
+
+				// Select All Data Depend On This ID
+
+				$check = checkItem('Item_ID', 'items', $itemid);
+
+				// If There's Such ID Show The Form
+
+				if ($check > 0) {
+
+					$stmt = $con->prepare("DELETE FROM items WHERE Item_ID = :zid");
+
+					$stmt->bindParam(":zid", $itemid);
+
+					$stmt->execute();
+
+					$theMsg = "<div class='alert alert-success'>" . $stmt->rowCount() . ' Record Deleted</div>';
+
+					redirectHome($theMsg, 'back');
+
+				} else {
+
+					$theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>';
+
+					redirectHome($theMsg);
+
+				}
+
+			echo '</div>';
 
 		} elseif ($do == 'Approve') {
 
+			echo "<h1 class='text-center'>Approve Item</h1>";
+			echo "<div class='container'>";
+
+				// Check If Get Request Item ID Is Numeric & Get The Integer Value Of It
+
+				$itemid = isset($_GET['itemid']) && is_numeric($_GET['itemid']) ? intval($_GET['itemid']) : 0;
+
+				// Select All Data Depend On This ID
+
+				$check = checkItem('Item_ID', 'items', $itemid);
+
+				// If There's Such ID Show The Form
+
+				if ($check > 0) {
+
+					$stmt = $con->prepare("UPDATE items SET Approve = 1 WHERE Item_ID = ?");
+
+					$stmt->execute(array($itemid));
+
+					$theMsg = "<div class='alert alert-success'>" . $stmt->rowCount() . ' Record Updated</div>';
+
+					redirectHome($theMsg, 'back');
+
+				} else {
+
+					$theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>';
+
+					redirectHome($theMsg);
+
+				}
+
+			echo '</div>';
 
 		}
 
