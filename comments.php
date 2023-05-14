@@ -6,22 +6,75 @@
     */
 
     ob_start(); // Output Buffering Start
+session_start();
+include 'init.php';
+$comment = new comment($con);
+include $tpl.'footer.php';
 
-    session_start();
+class comment
+{
+    private $con;
+    private $pageTitle;
+    private $do;
 
-    $pageTitle = 'Comments';
+    public function __construct($con)
+    {
+        $this->con = $con;
+        $this->pageTitle = 'Comments';
+        $this->run();
 
-    if (isset($_SESSION['Username'])) {
-        include 'init.php';
+    }
 
-        $do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
+
+   
+    public function run()
+    {
+        if (isset($_SESSION['Username'])) {
+            $this->do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
+
+            switch ($this->do) {
+                case 'Manage':
+                    $this->manageComment();
+                    break;
+    
+                case 'Edit':
+                    $this->editComment();
+                    break;
+                case 'Update':
+         
+                    $this->updateComment();
+                      break;
+                case 'Delete':
+                  
+                   $this->deleteComment();
+                    break;
+                case 'Approve':
+
+               $this->approveComment($userid);
+                    break;
+                default:
+                    $this->manageComment();
+            }
+        } else {
+            header('Location: login.php');
+            exit();
+        }
+    }
+
+    private function manageComment()
+    {
+        $query = '';
+
+        if (isset($_GET['page']) && $_GET['page'] == 'Pending') {
+            $query = 'AND RegStatus = 0';
+        }
 
         // Start Manage Page
 
-        if ($do == 'Manage') { // Manage Members Page
+       // Manage Members Page
             // Select All Users Except Admin
 
-            $stmt = $con->prepare('SELECT 
+            $stmt = $this->con->prepare('SELECT 
 										comments.*, items.Name AS Item_Name, users.Username AS Member  
 									FROM 
 										comments
@@ -43,6 +96,12 @@
             // Assign To Variable
 
             $comments = $stmt->fetchAll();
+
+            $this->ManageCommentsHTML($comments);
+        }
+    
+        private function ManageCommentsHTML($comments)
+        {
 
             if (!empty($comments)) {
                 ?>
@@ -92,28 +151,38 @@
             } ?>
 
 <?php
-        } elseif ($do == 'Edit') {
-            // Check If Get Request comid Is Numeric & Get Its Integer Value
+        }
+        
+        private function editComment()
+        {       
+             // Check If Get Request comid Is Numeric & Get Its Integer Value
 
-            $comid = isset($_GET['comid']) && is_numeric($_GET['comid']) ? intval($_GET['comid']) : 0;
+             $comid = isset($_GET['comid']) && is_numeric($_GET['comid']) ? intval($_GET['comid']) : 0;
 
-            // Select All Data Depend On This ID
-
-            $stmt = $con->prepare('SELECT * FROM comments WHERE c_id = ?');
-
-            // Execute Query
-
-            $stmt->execute([$comid]);
-
-            // Fetch The Data
-
-            $row = $stmt->fetch();
-
-            // The Row Count
-
-            $count = $stmt->rowCount();
+             // Select All Data Depend On This ID
+ 
+             $stmt = $this->con->prepare('SELECT * FROM comments WHERE c_id = ?');
+ 
+             // Execute Query
+ 
+             $stmt->execute([$comid]);
+ 
+             // Fetch The Data
+ 
+             $row = $stmt->fetch();
+ 
+             // The Row Count
+ 
+             $count = $stmt->rowCount();
 
             // If There's Such ID Show The Form
+
+            $this->ManageEditHTML($count,$row, $comid);
+
+
+         }
+          private function ManageEditHTML($count,$row, $comid)
+        {
 
             if ($count > 0) { ?>
 
@@ -151,7 +220,11 @@
 
                 echo '</div>';
             }
-        } elseif ($do == 'Update') {
+        }
+
+       public function updateComment(){
+        
+     
             echo "<h1 class='text-center'>Update Comment</h1>";
             echo "<div class='container'>";
 
@@ -163,7 +236,7 @@
 
                 // Update The Database With This Info
 
-                $stmt = $con->prepare('UPDATE comments SET comment = ? WHERE c_id = ?');
+                $stmt = $this->con->prepare('UPDATE comments SET comment = ? WHERE c_id = ?');
 
                 $stmt->execute([$comment, $comid]);
 
@@ -179,7 +252,8 @@
             }
 
             echo '</div>';
-        } elseif ($do == 'Delete') {
+        } 
+        public function deleteComment () {
             echo "<h1 class='text-center'>Delete Comment</h1>";
 
             echo "<div class='container'>";
@@ -195,7 +269,7 @@
             // If There's Such ID Show The Form
 
             if ($check > 0) {
-                $stmt = $con->prepare('DELETE FROM comments WHERE c_id = :zid');
+                $stmt = $this->con->prepare('DELETE FROM comments WHERE c_id = :zid');
 
                 $stmt->bindParam(':zid', $comid);
 
@@ -211,7 +285,8 @@
             }
 
             echo '</div>';
-        } elseif ($do == 'Activate') {
+        } 
+        public function  approveComment (){
             echo "<h1 class='text-center'>Approve Comment</h1>";
             echo "<div class='container'>";
 
@@ -226,7 +301,7 @@
             // If There's Such ID Show The Form
 
             if ($check > 0) {
-                $stmt = $con->prepare('UPDATE comments SET status = 1 WHERE c_id = ?');
+                $stmt = $this->con->prepare('UPDATE comments SET status = 1 WHERE c_id = ?');
 
                 $stmt->execute([$comid]);
 
@@ -242,12 +317,10 @@
             echo '</div>';
         }
 
-        include $tpl.'footer.php';
-    } else {
-        header('Location: index.php');
 
-        exit();
-    }
+    } 
+    
+     
 
     ob_end_flush(); // Release The Output
 

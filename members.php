@@ -6,6 +6,8 @@ ob_start(); // Output Buffering Start
 session_start();
 include 'init.php';
 $member = new MembersPage($con);
+include $tpl.'footer.php';
+
 class MembersPage
 {
     private $con;
@@ -17,6 +19,7 @@ class MembersPage
         $this->con = $con;
         $this->pageTitle = 'Members';
         $this->run();
+
     }
 
     public function run()
@@ -437,4 +440,5 @@ class MembersPage
 
         return $stmt->rowCount();
     }
+
 }

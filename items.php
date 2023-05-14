@@ -5,44 +5,136 @@
     */
 
     ob_start(); // Output Buffering Start
-
     session_start();
+    include 'init.php';
+    $item = new item($con);
+    include $tpl.'footer.php';
 
-    $pageTitle = 'Items';
+    class item
+    {
+        private $con;
+        private $pageTitle;
+        private $do;
+        public function __construct($con)
+        {
+            $this->con = $con;
+            $this->pageTitle = 'Items';
+            $this->run();
 
-    if (isset($_SESSION['Username'])) {
-        include 'init.php';
+        }
 
-        $do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
+        
+    public function run()
+    {
+        if (isset($_SESSION['Username'])) {
+            $this->do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
 
-        if ($do == 'Manage') {
-            $stmt = $con->prepare('SELECT 
-										items.*, 
-										categories.Name AS category_name, 
-										users.Username 
-									FROM 
-										items
-									INNER JOIN 
-										categories 
-									ON 
-										categories.ID = items.Cat_ID 
-									INNER JOIN 
-										users 
-									ON 
-										users.UserID = items.Member_ID
-									ORDER BY 
-										Item_ID DESC');
+            switch ($this->do) {
+                case 'Manage':
+                    $this->manageItems();
+                    break;
+                case 'Add':
+                    $this->addItem();
+                    break;
+                case 'Insert':
+                    if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+                       
+                        $name = $_POST['name'];
+                        $desc = $_POST['description'];
+                        $price = $_POST['price'];
+                        $country = $_POST['country'];
+                        $status = $_POST['status'];
+                        $member = $_POST['member'];
+                        $cat = $_POST['category'];
+                        $tags = $_POST['tags'];
 
-            // Execute The Statement
+                        $this->insertItem($name, $desc, $price, $country,
+                         $status,$member,$cat,$tags);
+                    }
+                    break;
+                case 'Edit':
+                    $itemid = isset($_GET['itemid']) && is_numeric($_GET['itemid']) ? intval($_GET['itemid']) : 0;
+                    $this->editItem($itemid);
+                    break;
+                case 'Update':
+                    $id = $_POST['itemid'];
+                    $name = $_POST['name'];
+                    $desc = $_POST['description'];
+                    $price = $_POST['price'];
+                    $country = $_POST['country'];
+                    $status = $_POST['status'];
+                    $cat = $_POST['category'];
+                    $member = $_POST['member'];
+                    $tags = $_POST['tags'];
+                    $this->updateItem($name, $desc, $price,
+                     $country,$status,$member,$cat,$tags,$id);
+                      break;
+                case 'Delete':
+                    $itemid = isset($_GET['itemid']) && is_numeric($_GET['itemid']) ? intval($_GET['itemid']) : 0;
 
-            $stmt->execute();
+                   // Select All Data Depend On This ID
 
-            // Assign To Variable
+                    $check = checkItem('userid', 'users', $itemid);
+                    $check > 0 ? $this->deleteItem($itemid) : $theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>'; redirectHome($theMsg);
+                    break;
+                case 'Approve':
+                      // Check If Get Request Item ID Is Numeric & Get The Integer Value Of It
 
-            $items = $stmt->fetchAll();
+            $itemid = isset($_GET['itemid']) && is_numeric($_GET['itemid']) ? intval($_GET['itemid']) : 0;
 
-            if (!empty($items)) {
-                ?>
+            // Select All Data Depend On This ID
+
+            $check = checkItem('Item_ID', 'items', $itemid);
+
+                    $check > 0 ? $this->ApproveItem($itemid) : $theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>'; redirectHome($theMsg);
+
+                    break;
+                default:
+                    $this->manageItems();
+            }
+        } else {
+            header('Location: login.php');
+            exit();
+        }
+    }
+
+    
+    private function manageItems()
+    {
+        $query = '';
+
+        if (isset($_GET['page']) && $_GET['page'] == 'Pending') {
+            $query = 'AND RegStatus = 0';
+        }
+
+        $stmt = $this->con->prepare('SELECT 
+        items.*, 
+        categories.Name AS category_name, 
+        users.Username 
+    FROM 
+        items
+    INNER JOIN 
+        categories 
+    ON 
+        categories.ID = items.Cat_ID 
+    INNER JOIN 
+        users 
+    ON 
+        users.UserID = items.Member_ID
+    ORDER BY 
+        Item_ID DESC');
+
+        $stmt->execute();
+        $rows = $stmt->fetchAll();
+
+        $this->ManageItemsHTML($rows);
+    }
+
+    private function ManageItemsHTML($items)
+    {
+        if (!empty($items)) {
+            ?>
+           
 
 <h1 class="text-center">Manage Items</h1>
 <div class="container">
@@ -99,7 +191,11 @@
             } ?>
 
 <?php
-        } elseif ($do == 'Add') { ?>
+
+        } 
+
+private function addItem()
+        { ?>
 
 <h1 class="text-center">Add New Item</h1>
 <div class="container">
@@ -210,25 +306,74 @@
 
 <?php
 
-        } elseif ($do == 'Insert') {
-            if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+        } 
+        public function insertItem($name, $desc, $price, $country, $status,$member,$cat,$tags)
+        {
                 echo "<h1 class='text-center'>Insert Item</h1>";
                 echo "<div class='container'>";
 
                 // Get Variables From The Form
 
-                $name = $_POST['name'];
-                $desc = $_POST['description'];
-                $price = $_POST['price'];
-                $country = $_POST['country'];
-                $status = $_POST['status'];
-                $member = $_POST['member'];
-                $cat = $_POST['category'];
-                $tags = $_POST['tags'];
+                $formErrors = $this->validateItemForm($name, $desc, $price, $country, $status,$member,$cat,$tags);
 
+                // Loop Into Errors Array And Echo It
+                if (!empty($formErrors)) {
+                foreach ($formErrors as $error) {
+                    echo '<div class="alert alert-danger">'.$error.'</div>';
+                
+                }
+                return false;
+            }
+
+                // Check If There's No Error Proceed The Update Operation
+
+               // Insert Iteminfo In Database
+
+                    $stmt = $this->con->prepare('INSERT INTO 
+
+						items(Name, Description, Price, Country_Made, Status, Add_Date, Cat_ID, Member_ID, tags)
+
+						VALUES(:zname, :zdesc, :zprice, :zcountry, :zstatus, now(), :zcat, :zmember, :ztags)');
+
+                    $stmt->execute([
+                        'zname' => $name,
+                        'zdesc' => $desc,
+                        'zprice' => $price,
+                        'zcountry' => $country,
+                        'zstatus' => $status,
+                        'zcat' => $cat,
+                        'zmember' => $member,
+                        'ztags' => $tags,
+                    ]);
+                    if ($stmt->rowCount() > 0) {
+
+                    // Echo Success Message
+
+                    $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Inserted</div>';
+
+                    redirectHome($theMsg, 'back');
+                    return true;
+                }
+             else {
+                
+        
+                echo "<div class='container'>";
+
+                $theMsg = '<div class="alert alert-danger">Sorry You Cant Browse This Page Directly</div>';
+
+                redirectHome($theMsg);
+
+                echo '</div>';
+            return false;
+            }
+
+            echo '</div>';
+
+            echo '</div>';
+        } 
+       private function validateItemForm($name, $desc, $price, $country, $status,$member,$cat,$tags){
+                $formErrors=[];
                 // Validate The Form
-
-                $formErrors = [];
 
                 if (empty($name)) {
                     $formErrors[] = 'Name Can\'t be <strong>Empty</strong>';
@@ -258,61 +403,18 @@
                     $formErrors[] = 'You Must Choose the <strong>Category</strong>';
                 }
 
-                // Loop Into Errors Array And Echo It
+                return $formErrors;
 
-                foreach ($formErrors as $error) {
-                    echo '<div class="alert alert-danger">'.$error.'</div>';
-                }
+        }
 
-                // Check If There's No Error Proceed The Update Operation
 
-                if (empty($formErrors)) {
-                    // Insert Iteminfo In Database
+        public function editItem($itemid) {
 
-                    $stmt = $con->prepare('INSERT INTO 
 
-						items(Name, Description, Price, Country_Made, Status, Add_Date, Cat_ID, Member_ID, tags)
-
-						VALUES(:zname, :zdesc, :zprice, :zcountry, :zstatus, now(), :zcat, :zmember, :ztags)');
-
-                    $stmt->execute([
-                        'zname' => $name,
-                        'zdesc' => $desc,
-                        'zprice' => $price,
-                        'zcountry' => $country,
-                        'zstatus' => $status,
-                        'zcat' => $cat,
-                        'zmember' => $member,
-                        'ztags' => $tags,
-                    ]);
-
-                    // Echo Success Message
-
-                    $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Inserted</div>';
-
-                    redirectHome($theMsg, 'back');
-                }
-            } else {
-                echo "<div class='container'>";
-
-                $theMsg = '<div class="alert alert-danger">Sorry You Cant Browse This Page Directly</div>';
-
-                redirectHome($theMsg);
-
-                echo '</div>';
-            }
-
-            echo '</div>';
-
-            echo '</div>';
-        } elseif ($do == 'Edit') {
-            // Check If Get Request item Is Numeric & Get Its Integer Value
-
-            $itemid = isset($_GET['itemid']) && is_numeric($_GET['itemid']) ? intval($_GET['itemid']) : 0;
 
             // Select All Data Depend On This ID
 
-            $stmt = $con->prepare('SELECT * FROM items WHERE Item_ID = ?');
+            $stmt = $this->con->prepare('SELECT * FROM items WHERE Item_ID = ?');
 
             // Execute Query
 
@@ -459,7 +561,7 @@
 
                     // Select All Users Except Admin
 
-                    $stmt = $con->prepare('SELECT 
+                    $stmt = $this->con->prepare('SELECT 
 												comments.*, users.Username AS Member  
 											FROM 
 												comments
@@ -525,67 +627,31 @@
 
                 echo '</div>';
             }
-        } elseif ($do == 'Update') {
+
+
+        } 
+
+
+
+        public function updateItem($name, $desc, $price,
+        $country,$status,$member,$cat,$tags,$id){
+
             echo "<h1 class='text-center'>Update Item</h1>";
             echo "<div class='container'>";
+            $formErrors = $this->validateItemForm($name, $desc, $price, $country, $status,$member,$cat,$tags);
 
-            if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-                // Get Variables From The Form
-
-                $id = $_POST['itemid'];
-                $name = $_POST['name'];
-                $desc = $_POST['description'];
-                $price = $_POST['price'];
-                $country = $_POST['country'];
-                $status = $_POST['status'];
-                $cat = $_POST['category'];
-                $member = $_POST['member'];
-                $tags = $_POST['tags'];
-
-                // Validate The Form
-
-                $formErrors = [];
-
-                if (empty($name)) {
-                    $formErrors[] = 'Name Can\'t be <strong>Empty</strong>';
-                }
-
-                if (empty($desc)) {
-                    $formErrors[] = 'Description Can\'t be <strong>Empty</strong>';
-                }
-
-                if (empty($price)) {
-                    $formErrors[] = 'Price Can\'t be <strong>Empty</strong>';
-                }
-
-                if (empty($country)) {
-                    $formErrors[] = 'Country Can\'t be <strong>Empty</strong>';
-                }
-
-                if ($status == 0) {
-                    $formErrors[] = 'You Must Choose the <strong>Status</strong>';
-                }
-
-                if ($member == 0) {
-                    $formErrors[] = 'You Must Choose the <strong>Member</strong>';
-                }
-
-                if ($cat == 0) {
-                    $formErrors[] = 'You Must Choose the <strong>Category</strong>';
-                }
-
-                // Loop Into Errors Array And Echo It
-
-                foreach ($formErrors as $error) {
-                    echo '<div class="alert alert-danger">'.$error.'</div>';
-                }
-
-                // Check If There's No Error Proceed The Update Operation
-
-                if (empty($formErrors)) {
+            // Loop Into Errors Array And Echo It
+        if (!empty($formErrors)) {
+            foreach ($formErrors as $error) {
+                echo '<div class="alert alert-danger">'.$error.'</div>';
+            }
+            return false;
+        }
+        
+              
                     // Update The Database With This Info
 
-                    $stmt = $con->prepare('UPDATE 
+                    $stmt = $this->con->prepare('UPDATE 
 												items 
 											SET 
 												Name = ?, 
@@ -602,39 +668,34 @@
                     $stmt->execute([$name, $desc, $price, $country, $status, $cat, $member, $tags, $id]);
 
                     // Echo Success Message
-
+                    if ($stmt->rowCount() > 0) {
                     $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
 
                     redirectHome($theMsg, 'back');
-                }
-            } else {
+                return true;
+                    }
+        else {
                 $theMsg = '<div class="alert alert-danger">Sorry You Cant Browse This Page Directly</div>';
-
                 redirectHome($theMsg);
+                return false;
             }
 
             echo '</div>';
-        } elseif ($do == 'Delete') {
+        }
+        public function deleteItem($itemid)
+        {
             echo "<h1 class='text-center'>Delete Item</h1>";
             echo "<div class='container'>";
 
-            // Check If Get Request Item ID Is Numeric & Get The Integer Value Of It
-
-            $itemid = isset($_GET['itemid']) && is_numeric($_GET['itemid']) ? intval($_GET['itemid']) : 0;
-
-            // Select All Data Depend On This ID
-
-            $check = checkItem('Item_ID', 'items', $itemid);
 
             // If There's Such ID Show The Form
 
-            if ($check > 0) {
-                $stmt = $con->prepare('DELETE FROM items WHERE Item_ID = :zid');
+                $stmt = $this->con->prepare('DELETE FROM items WHERE Item_ID = :zid');
 
                 $stmt->bindParam(':zid', $itemid);
 
                 $stmt->execute();
-
+                if($stmt->rowCount()>0){
                 $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Deleted</div>';
 
                 redirectHome($theMsg, 'back');
@@ -645,44 +706,30 @@
             }
 
             echo '</div>';
-        } elseif ($do == 'Approve') {
+        } 
+       private function  ApproveItem($itemid) {
             echo "<h1 class='text-center'>Approve Item</h1>";
             echo "<div class='container'>";
 
-            // Check If Get Request Item ID Is Numeric & Get The Integer Value Of It
-
-            $itemid = isset($_GET['itemid']) && is_numeric($_GET['itemid']) ? intval($_GET['itemid']) : 0;
-
-            // Select All Data Depend On This ID
-
-            $check = checkItem('Item_ID', 'items', $itemid);
-
+      
             // If There's Such ID Show The Form
 
-            if ($check > 0) {
-                $stmt = $con->prepare('UPDATE items SET Approve = 1 WHERE Item_ID = ?');
+           
+                $stmt = $this->con->prepare('UPDATE items SET Approve = 1 WHERE Item_ID = ?');
 
                 $stmt->execute([$itemid]);
 
                 $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
 
                 redirectHome($theMsg, 'back');
-            } else {
-                $theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>';
+          
 
-                redirectHome($theMsg);
-            }
-
-            echo '</div>';
         }
-
-        include $tpl.'footer.php';
-    } else {
-        header('Location: index.php');
-
-        exit();
+    
+    
     }
 
-    ob_end_flush(); // Release The Output
+    
+
 
 ?>
