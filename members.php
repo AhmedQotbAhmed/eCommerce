@@ -1,48 +1,118 @@
 <?php
 
-	/*
-	 Manage Members Page
-	*/
+// Manage Members Page
 
-	ob_start(); // Output Buffering Start
+ob_start(); // Output Buffering Start
+session_start();
+include 'init.php';
+$member = new MembersPage($con);
+class MembersPage
+{
+    private $con;
+    private $pageTitle;
+    private $do;
 
-	session_start();
+    public function __construct($con)
+    {
+        $this->con = $con;
+        $this->pageTitle = 'Members';
+        $this->run();
+    }
 
-	$pageTitle = 'Members';
+    public function run()
+    {
+        if (isset($_SESSION['Username'])) {
+            $this->do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
 
-	if (isset($_SESSION['Username'])) {
+            switch ($this->do) {
+                case 'Manage':
+                    $this->manageMembers();
+                    break;
+                case 'Add':
+                    $this->addMember();
+                    break;
+                case 'Insert':
+                    if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+                        echo "<h1 class='text-center'>Insert Member</h1>";
+                        echo "<div class='container'>";
 
-		include 'init.php';
+                        $avatarName = $_FILES['avatar']['name'];
+                        $avatarSize = $_FILES['avatar']['size'];
+                        $avatarTmp = $_FILES['avatar']['tmp_name'];
+                        $avatarType = $_FILES['avatar']['type'];
 
-		$do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
+                        $avatarAllowedExtension = ['jpeg', 'jpg', 'png', 'gif'];
 
-		// Start Manage Page
- 
-		if ($do == 'Manage') { // Manage Members Page
+                        // Get Avatar Extension
+                        $avatarParts = explode('.', $avatarName);
+                        $avatarExtension = strtolower(end($avatarParts));
 
-			$query = '';
+                        // Get Variables From The Form
 
-			if (isset($_GET['page']) && $_GET['page'] == 'Pending') {
+                        $username = $_POST['username'];
+                        $pass = $_POST['password'];
+                        $email = $_POST['email'];
+                        $name = $_POST['full'];
+                        $this->insertMember($username, $pass, $email, $name, $avatarExtension);
+                    }
+                    break;
+                case 'Edit':
+                    $this->editMember($userid);
+                    break;
+                case 'Update':
+                    echo "<h1 class='text-center'>Update Member</h1>";
+                    echo "<div class='container'>";
+                    $userID = $_POST['userid'];
+                    $username = $_POST['username'];
+                    $email = $_POST['email'];
+                    $fullName = $_POST['full'];
+                    $password = empty($_POST['newpassword']) ? $_POST['oldpassword'] : sha1($_POST['newpassword']);
 
-				$query = 'AND RegStatus = 0';
+                    $this->updateMember($userID, $username, $password, $email, $fullName);
+                    break;
+                case 'Delete':
+                    $userid = isset($_GET['userid']) && is_numeric($_GET['userid']) ? intval($_GET['userid']) : 0;
 
-			}
+                   // Select All Data Depend On This ID
 
-			// Select All Users Except Admin 
+                    $check = checkItem('userid', 'users', $userid);
+                    $check > 0 ? $this->deleteMember($userid) : $theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>'; redirectHome($theMsg);
+                    break;
+                case 'Activate':
+                    $userid = isset($_GET['userid']) && is_numeric($_GET['userid']) ? intval($_GET['userid']) : 0;
+                    $check = checkItem('userid', 'users', $userid);
 
-			$stmt = $con->prepare("SELECT * FROM users WHERE GroupID != 1 $query ORDER BY UserID DESC");
+                    $check > 0 ? $this->activateMember($userid) : $theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>'; redirectHome($theMsg);
 
-			// Execute The Statement
+                    break;
+                default:
+                    $this->manageMembers();
+            }
+        } else {
+            header('Location: login.php');
+            exit();
+        }
+    }
 
-			$stmt->execute();
+    private function manageMembers()
+    {
+        $query = '';
 
-			// Assign To Variable 
+        if (isset($_GET['page']) && $_GET['page'] == 'Pending') {
+            $query = 'AND RegStatus = 0';
+        }
 
-			$rows = $stmt->fetchAll();
+        $stmt = $this->con->prepare("SELECT * FROM users WHERE GroupID != 1 $query ORDER BY UserID DESC");
+        $stmt->execute();
+        $rows = $stmt->fetchAll();
 
-			if (! empty($rows)) {
+        $this->ManageMembersHTML($rows);
+    }
 
-			?>
+    private function ManageMembersHTML($rows)
+    {
+        if (!empty($rows)) {
+            ?>
 
 <h1 class="text-center">Manage Members</h1>
 <div class="container">
@@ -58,34 +128,33 @@
                 <td>Control</td>
             </tr>
             <?php
-							foreach($rows as $row) {
-								echo "<tr>";
-									echo "<td>" . $row['UserID'] . "</td>";
-									echo "<td>";
-									if (empty($row['avatar'])) {
-										echo 'No Image';
-									} else {
-										echo "<img src='uploads/avatars/" . $row['avatar'] . "' alt='' />";
-									}
-									echo "</td>";
+                                        foreach ($rows as $row) {
+                                            echo '<tr>';
+                                            echo '<td>'.$row['UserID'].'</td>';
+                                            echo '<td>';
+                                            if (empty($row['avatar'])) {
+                                                echo 'No Image';
+                                            } else {
+                                                echo "<img src='uploads/avatars/".$row['avatar']."' alt='' />";
+                                            }
+                                            echo '</td>';
 
-									echo "<td>" . $row['Username'] . "</td>";
-									echo "<td>" . $row['Email'] . "</td>";
-									echo "<td>" . $row['FullName'] . "</td>";
-									echo "<td>" . $row['Date'] ."</td>";
-									echo "<td>
-										<a href='members.php?do=Edit&userid=" . $row['UserID'] . "' class='btn btn-success'><i class='fa fa-edit'></i> Edit</a>
-										<a href='members.php?do=Delete&userid=" . $row['UserID'] . "' class='btn btn-danger confirm'><i class='fa fa-close'></i> Delete </a>";
-										if ($row['RegStatus'] == 0) {
-											echo "<a 
-													href='members.php?do=Activate&userid=" . $row['UserID'] . "' 
-													class='btn btn-info activate'>
-													<i class='fa fa-check'></i> Activate</a>";
-										}
-									echo "</td>";
-								echo "</tr>";
-							}
-						?>
+                                            echo '<td>'.$row['Username'].'</td>';
+                                            echo '<td>'.$row['Email'].'</td>';
+                                            echo '<td>'.$row['FullName'].'</td>';
+                                            echo '<td>'.$row['Date'].'</td>';
+                                            echo "<td>
+                                                    <a href='members.php?do=Edit&userid=".$row['UserID']."' class='btn btn-success'><i class='fa fa-edit'></i> Edit</a>
+                                                    <a href='members.php?do=Delete&userid=".$row['UserID']."' class='btn btn-danger confirm'><i class='fa fa-close'></i> Delete </a>";
+                                            if ($row['RegStatus'] == 0) {
+                                                echo "<a 
+                                                                href='members.php?do=Activate&userid=".$row['UserID']."' 
+                                                                class='btn btn-info activate'>
+                                                                <i class='fa fa-check'></i> Activate</a>";
+                                            }
+                                            echo '</td>';
+                                            echo '</tr>';
+                                        } ?>
             <tr>
         </table>
     </div>
@@ -94,20 +163,23 @@
     </a>
 </div>
 
-<?php } else {
-
-				echo '<div class="container">';
-					echo '<div class="nice-message">There\'s No Members To Show</div>';
-					echo '<a href="members.php?do=Add" class="btn btn-primary">
+<?php
+        } else {
+            echo '<div class="container">';
+            echo '<div class="nice-message">There\'s No Members To Show</div>';
+            echo '<a href="members.php?do=Add" class="btn btn-primary">
 							<i class="fa fa-plus"></i> New Member
 						</a>';
-				echo '</div>';
+            echo '</div>';
+        } ?>
 
-			} ?>
+<?php
 
-<?php 
+        // $content = ob_get_clean();
+    }
 
-		} elseif ($do == 'Add') { // Add Page ?>
+    private function addMember()
+    { ?>
 
 <h1 class="text-center">Add New Member</h1>
 <div class="container">
@@ -167,180 +239,106 @@
     </form>
 </div>
 
-<?php 
-
-		} elseif ($do == 'Insert') {
-
-			// Insert Member Page
-
-			if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-
-				echo "<h1 class='text-center'>Insert Member</h1>";
-				echo "<div class='container'>";
-
-
-				$avatarName = $_FILES['avatar']['name'];
-				$avatarSize = $_FILES['avatar']['size'];
-				$avatarTmp	= $_FILES['avatar']['tmp_name'];
-				$avatarType = $_FILES['avatar']['type'];
-
-
-				$avatarAllowedExtension = array("jpeg", "jpg", "png", "gif");
-
-				// Get Avatar Extension
-
-				$avatarExtension = strtolower(end(explode('.', $avatarName)));
-
-				// Get Variables From The Form
-
-				$user 	= $_POST['username'];
-				$pass 	= $_POST['password'];
-				$email 	= $_POST['email'];
-				$name 	= $_POST['full'];
-
-				$hashPass = sha1($_POST['password']);
-
-				// Validate The Form
-
-				$formErrors = array();
-
-				if (strlen($user) < 4) {
-					$formErrors[] = 'Username Cant Be Less Than <strong>4 Characters</strong>';
-				}
-
-				if (strlen($user) > 20) {
-					$formErrors[] = 'Username Cant Be More Than <strong>20 Characters</strong>';
-				}
-
-				if (empty($user)) {
-					$formErrors[] = 'Username Cant Be <strong>Empty</strong>';
-				}
-
-				if (empty($pass)) {
-					$formErrors[] = 'Password Cant Be <strong>Empty</strong>';
-				}
-
-				if (empty($name)) {
-					$formErrors[] = 'Full Name Cant Be <strong>Empty</strong>';
-				}
-
-				if (empty($email)) {
-					$formErrors[] = 'Email Cant Be <strong>Empty</strong>';
-				}
-
-				if (! empty($avatarName) && ! in_array($avatarExtension, $avatarAllowedExtension)) {
-					$formErrors[] = 'This Extension Is Not <strong>Allowed</strong>';
-				}
-
-				if (empty($avatarName)) {
-					$formErrors[] = 'Avatar Is <strong>Required</strong>';
-				}
-
-				if ($avatarSize > 4194304) {
-					$formErrors[] = 'Avatar Cant Be Larger Than <strong>4MB</strong>';
-				}
-
-				// Loop Into Errors Array And Echo It
-
-				foreach($formErrors as $error) {
-					echo '<div class="alert alert-danger">' . $error . '</div>';
-				}
-
-				// Check If There's No Error Proceed The Update Operation
-
-				if (empty($formErrors)) {
-
-					$avatar = rand(0, 10000000000) . '_' . $avatarName;
-
-					move_uploaded_file($avatarTmp, "uploads\avatars\\" . $avatar);
-
-					// Check If User Exist in Database
-
-					$check = checkItem("Username", "users", $user);
-
-					if ($check == 1) {
-
-						$theMsg = '<div class="alert alert-danger">Sorry This User Is Exist</div>';
-
-						redirectHome($theMsg, 'back');
-
-					} else {
-
-						// Insert Userinfo In Database
-
-						$stmt = $con->prepare("INSERT INTO 
-													users(Username, Password, Email, FullName, RegStatus, Date, avatar)
-												VALUES(:zuser, :zpass, :zmail, :zname, 1, now(), :zavatar) ");
-						$stmt->execute(array(
-
-							'zuser' 	=> $user,
-							'zpass' 	=> $hashPass,
-							'zmail' 	=> $email,
-							'zname' 	=> $name,
-							'zavatar'	=> $avatar
-
-						));
-
-						// Echo Success Message
-
-						$theMsg = "<div class='alert alert-success'>" . $stmt->rowCount() . ' Record Inserted</div>';
-
-						redirectHome($theMsg, 'back');
-
-					}
-
-				}
-
-
-			} else {
-
-				echo "<div class='container'>";
-
-				$theMsg = '<div class="alert alert-danger">Sorry You Cant Browse This Page Directly</div>';
-
-				redirectHome($theMsg);
-
-				echo "</div>";
-
-			}
-
-			echo "</div>";
-
-		} elseif ($do == 'Edit') {
-
-			// Check If Get Request userid Is Numeric & Get Its Integer Value
-
-			$userid = isset($_GET['userid']) && is_numeric($_GET['userid']) ? intval($_GET['userid']) : 0;
-
-			// Select All Data Depend On This ID
-
-			$stmt = $con->prepare("SELECT * FROM users WHERE UserID = ? LIMIT 1");
-
-			// Execute Query
-
-			$stmt->execute(array($userid));
-
-			// Fetch The Data
-
-			$row = $stmt->fetch();
-
-			// The Row Count
-
-			$count = $stmt->rowCount();
-
-			// If There's Such ID Show The Form
-
-			if ($count > 0) { ?>
+<?php
+
+    }
+
+    // Insert Member Function
+    public function insertMember($username, $password, $email, $fullName, $avatar)
+    {
+        // Validate the form data
+        $formErrors = $this->validateMemberForm($username, $password, $email, $fullName, $avatar);
+
+        // Check if there are any errors
+        if (!empty($formErrors)) {
+            foreach ($formErrors as $error) {
+                echo '<div class="alert alert-danger">'.$error.'</div>';
+            }
+
+            return false; // Return false to indicate an error occurred
+        }
+
+        // Encrypt the password before storing it
+        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+
+        // Insert the member data into the database
+        $stmt = $this->con->prepare('INSERT INTO users(Username, Password, Email, FullName, Avatar, RegStatus, Date) 
+                        VALUES (?, ?, ?, ?, ?, 0, now())');
+        $stmt->execute([$username, $hashedPassword, $email, $fullName, $avatar]);
+
+        // Check if the insertion was successful
+        if ($stmt->rowCount() > 0) {
+            $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Inserted</div>';
+            redirectHome($theMsg, 'back');
+
+            return true; // Return true to indicate success
+        } else {
+            echo '<div class="alert alert-danger">Failed to insert the member.</div>';
+
+            return false; // Return false to indicate an error occurred
+        }
+    }
+
+    // Validate Member Form Function
+    public function validateMemberForm($username, $password, $email, $fullName, $avatar)
+    {
+        $errors = [];
+
+        // Validate username
+        if (empty($username)) {
+            $errors[] = 'Username is required.';
+        } elseif (strlen($username) < 3) {
+            $errors[] = 'Username must be at least 3 characters long.';
+        }
+
+        // Validate password
+        if (empty($password)) {
+            $errors[] = 'Password is required.';
+        } elseif (strlen($password) < 6) {
+            $errors[] = 'Password must be at least 6 characters long.';
+        }
+
+        // Validate email
+        if (empty($email)) {
+            $errors[] = 'Email is required.';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'Invalid email format.';
+        }
+
+        // Validate fullName
+        if (empty($fullName)) {
+            $errors[] = 'Full name is required.';
+        } elseif (strlen($fullName) < 3) {
+            $errors[] = 'Full name must be at least 3 characters long.';
+        }
+
+        // Validate avatar
+        if (empty($avatar)) {
+            $errors[] = 'Avatar is required.';
+        }
+
+        return $errors;
+    }
+
+    // Edit Member Function
+    public function editMember($userid)
+    {
+        $stmt = $this->con->prepare('SELECT * FROM users WHERE UserID = ? LIMIT 1');
+        $stmt->execute([$userid]);
+        $row = $stmt->fetch();
+        $count = $stmt->rowCount();
+
+        if ($count > 0) { ?>
 
 <h1 class="text-center">Edit Member</h1>
 <div class="container">
     <form class="form-horizontal" action="?do=Update" method="POST">
-        <input type="hidden" name="userid" value="<?php echo $userid ?>" />
+        <input type="hidden" name="userid" value="<?php echo $userid; ?>" />
         <!-- Start Username Field -->
         <div class="form-group form-group-lg">
             <label class="col-sm-2 control-label">Username</label>
             <div class="col-sm-10 col-md-6">
-                <input type="text" name="username" class="form-control" value="<?php echo $row['Username'] ?>"
+                <input type="text" name="username" class="form-control" value="<?php echo $row['Username']; ?>"
                     autocomplete="off" required="required" />
             </div>
         </div>
@@ -349,7 +347,7 @@
         <div class="form-group form-group-lg">
             <label class="col-sm-2 control-label">Password</label>
             <div class="col-sm-10 col-md-6">
-                <input type="hidden" name="oldpassword" value="<?php echo $row['Password'] ?>" />
+                <input type="hidden" name="oldpassword" value="<?php echo $row['Password']; ?>" />
                 <input type="password" name="newpassword" class="form-control" autocomplete="new-password"
                     placeholder="Leave Blank If You Dont Want To Change" />
             </div>
@@ -359,7 +357,7 @@
         <div class="form-group form-group-lg">
             <label class="col-sm-2 control-label">Email</label>
             <div class="col-sm-10 col-md-6">
-                <input type="email" name="email" value="<?php echo $row['Email'] ?>" class="form-control"
+                <input type="email" name="email" value="<?php echo $row['Email']; ?>" class="form-control"
                     required="required" />
             </div>
         </div>
@@ -368,7 +366,7 @@
         <div class="form-group form-group-lg">
             <label class="col-sm-2 control-label">Full Name</label>
             <div class="col-sm-10 col-md-6">
-                <input type="text" name="full" value="<?php echo $row['FullName'] ?>" class="form-control"
+                <input type="text" name="full" value="<?php echo $row['FullName']; ?>" class="form-control"
                     required="required" />
             </div>
         </div>
@@ -385,202 +383,58 @@
 
 <?php
 
-			// If There's No Such ID Show Error Message
+            // If There's No Such ID Show Error Message
+            } else {
+                echo "<div class='container'>";
 
-			} else {
+                $theMsg = '<div class="alert alert-danger">Theres No Such ID</div>';
 
-				echo "<div class='container'>";
+                redirectHome($theMsg);
 
-				$theMsg = '<div class="alert alert-danger">Theres No Such ID</div>';
+                echo '</div>';
 
-				redirectHome($theMsg);
+                return $stmt->fetch();
+            }
+    }
 
-				echo "</div>";
+    // Update Member Function
+    public function updateMember($userID, $username, $password, $email, $fullName)
+    {
+        $stmt = $this->con->prepare('UPDATE users SET Username = ?, Email = ?, FullName = ?, Password = ? WHERE UserID = ?');
 
-			}
+        $stmt->execute([$username, $email, $fullName, $password, $userID]);
+        $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
 
-		} elseif ($do == 'Update') { // Update Page
+        redirectHome($theMsg, 'back');
 
-			echo "<h1 class='text-center'>Update Member</h1>";
-			echo "<div class='container'>";
+        return $stmt->rowCount();
+    }
 
-			if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Delete Member Function
+    public function deleteMember($userID)
+    {
+        echo "<h1 class='text-center'>Delete Member</h1>";
+        echo "<div class='container'>";
+        $stmt = $this->con->prepare('DELETE FROM users WHERE UserID = ?');
+        $stmt->execute([$userID]);
+        $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
 
-				// Get Variables From The Form
+        redirectHome($theMsg);
 
-				$id 	= $_POST['userid'];
-				$user 	= $_POST['username'];
-				$email 	= $_POST['email'];
-				$name 	= $_POST['full'];
+        return $stmt->rowCount();
+    }
 
-				// Password Trick
+    // Activate Member Function
+    public function activateMember($userID)
+    {
+        echo "<h1 class='text-center'>Activate Member</h1>";
+        echo "<div class='container'>";
+        $stmt = $this->con->prepare('UPDATE users SET RegStatus = 1 WHERE UserID = ?');
+        $stmt->execute([$userID]);
+        $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
 
-				$pass = empty($_POST['newpassword']) ? $_POST['oldpassword'] : sha1($_POST['newpassword']);
+        redirectHome($theMsg);
 
-				// Validate The Form
-
-				$formErrors = array();
-
-				if (strlen($user) < 4) {
-					$formErrors[] = 'Username Cant Be Less Than <strong>4 Characters</strong>';
-				}
-
-				if (strlen($user) > 20) {
-					$formErrors[] = 'Username Cant Be More Than <strong>20 Characters</strong>';
-				}
-
-				if (empty($user)) {
-					$formErrors[] = 'Username Cant Be <strong>Empty</strong>';
-				}
-
-				if (empty($name)) {
-					$formErrors[] = 'Full Name Cant Be <strong>Empty</strong>';
-				}
-
-				if (empty($email)) {
-					$formErrors[] = 'Email Cant Be <strong>Empty</strong>';
-				}
-
-				// Loop Into Errors Array And Echo It
-
-				foreach($formErrors as $error) {
-					echo '<div class="alert alert-danger">' . $error . '</div>';
-				}
-
-				// Check If There's No Error Proceed The Update Operation
-
-				if (empty($formErrors)) {
-
-					$stmt2 = $con->prepare("SELECT 
-												*
-											FROM 
-												users
-											WHERE
-												Username = ?
-											AND 
-												UserID != ?");
-
-					$stmt2->execute(array($user, $id));
-
-					$count = $stmt2->rowCount();
-
-					if ($count == 1) {
-
-						$theMsg = '<div class="alert alert-danger">Sorry This User Is Exist</div>';
-
-						redirectHome($theMsg, 'back');
-
-					} else { 
-
-						// Update The Database With This Info
-
-						$stmt = $con->prepare("UPDATE users SET Username = ?, Email = ?, FullName = ?, Password = ? WHERE UserID = ?");
-
-						$stmt->execute(array($user, $email, $name, $pass, $id));
-
-						// Echo Success Message
-
-						$theMsg = "<div class='alert alert-success'>" . $stmt->rowCount() . ' Record Updated</div>';
-
-						redirectHome($theMsg, 'back');
-
-					}
-
-				}
-
-			} else {
-
-				$theMsg = '<div class="alert alert-danger">Sorry You Cant Browse This Page Directly</div>';
-
-				redirectHome($theMsg);
-
-			}
-
-			echo "</div>";
-
-		} elseif ($do == 'Delete') { // Delete Member Page
-
-			echo "<h1 class='text-center'>Delete Member</h1>";
-			echo "<div class='container'>";
-
-				// Check If Get Request userid Is Numeric & Get The Integer Value Of It
-
-				$userid = isset($_GET['userid']) && is_numeric($_GET['userid']) ? intval($_GET['userid']) : 0;
-
-				// Select All Data Depend On This ID
-
-				$check = checkItem('userid', 'users', $userid);
-
-				// If There's Such ID Show The Form
-
-				if ($check > 0) {
-
-					$stmt = $con->prepare("DELETE FROM users WHERE UserID = :zuser");
-
-					$stmt->bindParam(":zuser", $userid);
-
-					$stmt->execute();
-
-					$theMsg = "<div class='alert alert-success'>" . $stmt->rowCount() . ' Record Deleted</div>';
-
-					redirectHome($theMsg, 'back');
-
-				} else {
-
-					$theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>';
-
-					redirectHome($theMsg);
-
-				}
-
-			echo '</div>';
-
-		} elseif ($do == 'Activate') {
-
-			echo "<h1 class='text-center'>Activate Member</h1>";
-			echo "<div class='container'>";
-
-				// Check If Get Request userid Is Numeric & Get The Integer Value Of It
-
-				$userid = isset($_GET['userid']) && is_numeric($_GET['userid']) ? intval($_GET['userid']) : 0;
-
-				// Select All Data Depend On This ID
-
-				$check = checkItem('userid', 'users', $userid);
-
-				// If There's Such ID Show The Form
-
-				if ($check > 0) {
-
-					$stmt = $con->prepare("UPDATE users SET RegStatus = 1 WHERE UserID = ?");
-
-					$stmt->execute(array($userid));
-
-					$theMsg = "<div class='alert alert-success'>" . $stmt->rowCount() . ' Record Updated</div>';
-
-					redirectHome($theMsg);
-
-				} else {
-
-					$theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>';
-
-					redirectHome($theMsg);
-
-				}
-
-			echo '</div>';
-
-		}
-
-		include $tpl . 'footer.php';
-
-	} else {
-
-		header('Location: index.php');
-
-		exit();
-	}
-
-	ob_end_flush(); // Release The Output
-
-?>
+        return $stmt->rowCount();
+    }
+}
