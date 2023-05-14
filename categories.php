@@ -4,18 +4,75 @@
     Category Page
     */
 
-    ob_start();
 
-    session_start();
 
-    $pageTitle = 'Categories';
+ob_start(); // Output Buffering Start
+session_start();
+include 'init.php';
+$category = new category($con);
+include $tpl.'footer.php';
+
+class category
+{
+    private $con;
+    private $pageTitle;
+    private $do;
+
+    public function __construct($con)
+    {
+        $this->con = $con;
+        $this->pageTitle = 'Categories';
+        $this->run();
+
+    }
+    public function run()
+    {
+
 
     if (isset($_SESSION['Username'])) {
-        include 'init.php';
+        $this->do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
 
-        $do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
+        
+        switch ($this->do) {
+            case 'Manage':
+                $this->manageCategories();
+                break;
+            case 'Add':
+                $this->addCategorie();
+                break;
+            case 'Insert':
+                if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+                  
+                    $this->insertCategorie();
+                }
+                break;
+            case 'Edit':
+                $this->editCategorie();
+                break;
+            case 'Update':
+         
+                $this->updateCategorie();
+                break;
+            case 'Delete':
+             $this->deleteCategorie();
+             break;
+    
+            default:
+                $this->manageCategories();
+        }
+    } else {
+        header('Location: login.php');
+        exit();
+    }
+}    private function manageCategories()
+{
+    $query = '';
 
-        if ($do == 'Manage') {
+    if (isset($_GET['page']) && $_GET['page'] == 'Pending') {
+        $query = 'AND RegStatus = 0';
+    }
+
+        
             $sort = 'asc';
 
             $sort_array = ['asc', 'desc'];
@@ -24,11 +81,17 @@
                 $sort = $_GET['sort'];
             }
 
-            $stmt2 = $con->prepare("SELECT * FROM categories WHERE parent = 0 ORDER BY Ordering $sort");
+            $stmt2 = $this->con->prepare("SELECT * FROM categories WHERE parent = 0 ORDER BY Ordering $sort");
 
             $stmt2->execute();
 
             $cats = $stmt2->fetchAll();
+            $this->manageCategoriesHTML($cats,$sort);
+
+        }
+
+          
+    private function manageCategoriesHTML($cats,$sort){  
 
             if (!empty($cats)) {
                 ?>
@@ -112,7 +175,10 @@
             } ?>
 
 <?php
-        } elseif ($do == 'Add') { ?>
+        } 
+        
+        private function addCategorie()
+ { ?>
 
 <h1 class="text-center">Add New Category</h1>
 <div class="container">
@@ -216,7 +282,9 @@
 
 <?php
 
-        } elseif ($do == 'Insert') {
+        } 
+    public function insertCategorie () {
+
             if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 echo "<h1 class='text-center'>Insert Category</h1>";
                 echo "<div class='container'>";
@@ -242,7 +310,7 @@
                 } else {
                     // Insert Category Info In Database
 
-                    $stmt = $con->prepare('INSERT INTO 
+                    $stmt = $this->con->prepare('INSERT INTO 
 
 						categories(Name, Description, parent, Ordering, Visibility, Allow_Comment, Allow_Ads)
 
@@ -275,12 +343,15 @@
             }
 
             echo '</div>';
-        } elseif ($do == 'Edit') {
+        }
+
+        
+    public function editCategorie () {
             // Check If Get Request catid Is Numeric & Get Its Integer Value
 
             $catid = isset($_GET['catid']) && is_numeric($_GET['catid']) ? intval($_GET['catid']) : 0;
 
-            $stmt = $con->prepare('SELECT * FROM categories WHERE ID = ?');
+            $stmt = $this->con->prepare('SELECT * FROM categories WHERE ID = ?');
 
             $stmt->execute([$catid]);
 
@@ -289,8 +360,14 @@
             $count = $stmt->rowCount();
 
             // If There's Such ID Show The Form
+   $this->editCategorieHTML($cat,$catid);
 
-            if ($count > 0) { ?>
+        }
+
+          
+    private function editCategorieHTML($cat,$catid){  
+
+    if (!empty( $cat)) { ?>
 
 <h1 class="text-center">Edit Category</h1>
 <div class="container">
@@ -422,7 +499,9 @@
 
                 echo '</div>';
             }
-        } elseif ($do == 'Update') {
+        }
+        
+        public function updateCategorie () {
             echo "<h1 class='text-center'>Update Category</h1>";
             echo "<div class='container'>";
 
@@ -441,7 +520,7 @@
 
                 // Update The Database With This Info
 
-                $stmt = $con->prepare('UPDATE 
+                $stmt = $this->con->prepare('UPDATE 
 											categories 
 										SET 
 											Name = ?, 
@@ -468,7 +547,9 @@
             }
 
             echo '</div>';
-        } elseif ($do == 'Delete') {
+        } 
+        
+        public function deleteCategorie() {
             echo "<h1 class='text-center'>Delete Category</h1>";
             echo "<div class='container'>";
 
@@ -483,7 +564,7 @@
             // If There's Such ID Show The Form
 
             if ($check > 0) {
-                $stmt = $con->prepare('DELETE FROM categories WHERE ID = :zid');
+                $stmt = $this->con->prepare('DELETE FROM categories WHERE ID = :zid');
 
                 $stmt->bindParam(':zid', $catid);
 
@@ -501,12 +582,8 @@
             echo '</div>';
         }
 
-        include $tpl.'footer.php';
-    } else {
-        header('Location: index.php');
-
-        exit();
-    }
+    } 
+    
 
     ob_end_flush(); // Release The Output
 
