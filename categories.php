@@ -9,8 +9,6 @@ session_start();
 include 'init.php';
 include_once 'model/CategoryModel.php';
 include_once 'view/CategoryView.php';
-$category = new category($con);
-include $tpl.'footer.php';
 
 class category
 {
@@ -29,7 +27,7 @@ class category
         $this->run();
     }
 
-    public function run()
+    private function run()
     {
         if (isset($_SESSION['Username'])) {
             $this->do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
@@ -72,7 +70,7 @@ class category
         $this->view->manageCategoriesHTML($catSort[0], $catSort[1]);
     }
 
-    public function insertCategorie()
+    private function insertCategorie()
     {
         // ($name, $desc, $parent, $order, $visible, $comment, $ads)
 
@@ -120,7 +118,7 @@ class category
         echo '</div>';
     }
 
-    public function editCategorie()
+    private function editCategorie()
     {
         // Check If Get Request catid Is Numeric & Get Its Integer Value
 
@@ -132,7 +130,7 @@ class category
         $this->view->editCategorieHTML($cat, $catid);
     }
 
-    public function updateCategorie()
+    private function updateCategorie()
     {
         echo "<h1 class='text-center'>Update Category</h1>";
         echo "<div class='container'>";
@@ -166,7 +164,7 @@ class category
         echo '</div>';
     }
 
-    public function deleteCategorie()
+    private function deleteCategorie()
     {
         echo "<h1 class='text-center'>Delete Category</h1>";
         echo "<div class='container'>";
@@ -195,5 +193,6 @@ class category
         echo '</div>';
     }
 }
-
+$category = new category($con);
+include $tpl.'footer.php';
     ob_end_flush(); // Release The Output
