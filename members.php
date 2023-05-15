@@ -5,21 +5,21 @@
 ob_start(); // Output Buffering Start
 session_start();
 include 'init.php';
-$member = new MembersPage($con);
-include $tpl.'footer.php';
+include_once 'model/MemberModel.php';
 
 class MembersPage
 {
     private $con;
     private $pageTitle;
     private $do;
+    private $model;
 
     public function __construct($con)
     {
         $this->con = $con;
         $this->pageTitle = 'Members';
+        $this->model = new MembersModel($con);
         $this->run();
-
     }
 
     public function run()
@@ -36,53 +36,23 @@ class MembersPage
                     break;
                 case 'Insert':
                     if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-                        echo "<h1 class='text-center'>Insert Member</h1>";
-                        echo "<div class='container'>";
-
-                        $avatarName = $_FILES['avatar']['name'];
-                        $avatarSize = $_FILES['avatar']['size'];
-                        $avatarTmp = $_FILES['avatar']['tmp_name'];
-                        $avatarType = $_FILES['avatar']['type'];
-
-                        $avatarAllowedExtension = ['jpeg', 'jpg', 'png', 'gif'];
-
-                        // Get Avatar Extension
-                        $avatarParts = explode('.', $avatarName);
-                        $avatarExtension = strtolower(end($avatarParts));
-
-                        // Get Variables From The Form
-
-                        $username = $_POST['username'];
-                        $pass = $_POST['password'];
-                        $email = $_POST['email'];
-                        $name = $_POST['full'];
-                        $this->insertMember($username, $pass, $email, $name, $avatarExtension);
+                        $this->insertMember();
                     }
                     break;
                 case 'Edit':
-                    $this->editMember($userid);
+                    $this->editMember();
                     break;
                 case 'Update':
-                    echo "<h1 class='text-center'>Update Member</h1>";
-                    echo "<div class='container'>";
-                    $userID = $_POST['userid'];
-                    $username = $_POST['username'];
-                    $email = $_POST['email'];
-                    $fullName = $_POST['full'];
-                    $password = empty($_POST['newpassword']) ? $_POST['oldpassword'] : sha1($_POST['newpassword']);
-
-                    $this->updateMember($userID, $username, $password, $email, $fullName);
+                    $this->updateMember();
                     break;
                 case 'Delete':
-                    $userid = isset($_GET['userid']) && is_numeric($_GET['userid']) ? intval($_GET['userid']) : 0;
-
+                    $userid = $this->getUserID();
                    // Select All Data Depend On This ID
-
                     $check = checkItem('userid', 'users', $userid);
                     $check > 0 ? $this->deleteMember($userid) : $theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>'; redirectHome($theMsg);
                     break;
                 case 'Activate':
-                    $userid = isset($_GET['userid']) && is_numeric($_GET['userid']) ? intval($_GET['userid']) : 0;
+                    $userid = $this->getUserID();
                     $check = checkItem('userid', 'users', $userid);
 
                     $check > 0 ? $this->activateMember($userid) : $theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>'; redirectHome($theMsg);
@@ -99,17 +69,10 @@ class MembersPage
 
     private function manageMembers()
     {
-        $query = '';
+        // call model class
 
-        if (isset($_GET['page']) && $_GET['page'] == 'Pending') {
-            $query = 'AND RegStatus = 0';
-        }
-
-        $stmt = $this->con->prepare("SELECT * FROM users WHERE GroupID != 1 $query ORDER BY UserID DESC");
-        $stmt->execute();
-        $rows = $stmt->fetchAll();
-
-        $this->ManageMembersHTML($rows);
+        $row = $this->model->getAllMembers();
+        $this->ManageMembersHTML($row);
     }
 
     private function ManageMembersHTML($rows)
@@ -182,7 +145,8 @@ class MembersPage
     }
 
     private function addMember()
-    { ?>
+    {
+        ?>
 
 <h1 class="text-center">Add New Member</h1>
 <div class="container">
@@ -228,7 +192,7 @@ class MembersPage
         <div class="form-group form-group-lg">
             <label class="col-sm-2 control-label">User Avatar</label>
             <div class="col-sm-10 col-md-6">
-                <input type="file" name="avatar" class="form-control" required="required" />
+                <input type="file" name="avatar" class="form-control" />
             </div>
         </div>
         <!-- End Avatar Field -->
@@ -243,31 +207,38 @@ class MembersPage
 </div>
 
 <?php
+    }
 
+    public function getAvatarName()
+    {
+        $avatarName = $_FILES['avatar']['name'];
+        $avatarSize = $_FILES['avatar']['size'];
+        $avatarTmp = $_FILES['avatar']['tmp_name'];
+        $avatarType = $_FILES['avatar']['type'];
+
+        $avatarAllowedExtension = ['jpeg', 'jpg', 'png', 'gif'];
+
+        // Get Avatar Extension
+        $avatarParts = explode('.', $avatarName);
+        $avatar = strtolower(end($avatarParts));
+
+        return $avatar;
     }
 
     // Insert Member Function
-    public function insertMember($username, $password, $email, $fullName, $avatar)
+    public function insertMember()
     {
-        // Validate the form data
-        $formErrors = $this->validateMemberForm($username, $password, $email, $fullName, $avatar);
+        echo "<h1 class='text-center'>Insert Member</h1>";
+        echo "<div class='container'>";
 
-        // Check if there are any errors
-        if (!empty($formErrors)) {
-            foreach ($formErrors as $error) {
-                echo '<div class="alert alert-danger">'.$error.'</div>';
-            }
-
-            return false; // Return false to indicate an error occurred
-        }
-
-        // Encrypt the password before storing it
-        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-
-        // Insert the member data into the database
-        $stmt = $this->con->prepare('INSERT INTO users(Username, Password, Email, FullName, Avatar, RegStatus, Date) 
-                        VALUES (?, ?, ?, ?, ?, 0, now())');
-        $stmt->execute([$username, $hashedPassword, $email, $fullName, $avatar]);
+        // Get Variables From The Form
+        $username = $_POST['username'];
+        $password = $_POST['password'];
+        $email = $_POST['email'];
+        $fullName = $_POST['full'];
+        $avatar = $this->getAvatarName();
+        // call model class
+        $stmt = $this->model->insertMember($username, $password, $email, $fullName, $avatar);
 
         // Check if the insertion was successful
         if ($stmt->rowCount() > 0) {
@@ -282,56 +253,21 @@ class MembersPage
         }
     }
 
-    // Validate Member Form Function
-    public function validateMemberForm($username, $password, $email, $fullName, $avatar)
+    public function getUserID()
     {
-        $errors = [];
+        $userid = isset($_GET['userid']) && is_numeric($_GET['userid']) ? intval($_GET['userid']) : 0;
 
-        // Validate username
-        if (empty($username)) {
-            $errors[] = 'Username is required.';
-        } elseif (strlen($username) < 3) {
-            $errors[] = 'Username must be at least 3 characters long.';
-        }
-
-        // Validate password
-        if (empty($password)) {
-            $errors[] = 'Password is required.';
-        } elseif (strlen($password) < 6) {
-            $errors[] = 'Password must be at least 6 characters long.';
-        }
-
-        // Validate email
-        if (empty($email)) {
-            $errors[] = 'Email is required.';
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $errors[] = 'Invalid email format.';
-        }
-
-        // Validate fullName
-        if (empty($fullName)) {
-            $errors[] = 'Full name is required.';
-        } elseif (strlen($fullName) < 3) {
-            $errors[] = 'Full name must be at least 3 characters long.';
-        }
-
-        // Validate avatar
-        if (empty($avatar)) {
-            $errors[] = 'Avatar is required.';
-        }
-
-        return $errors;
+        return $userid;
     }
 
     // Edit Member Function
-    public function editMember($userid)
+    public function editMember()
     {
-        $stmt = $this->con->prepare('SELECT * FROM users WHERE UserID = ? LIMIT 1');
-        $stmt->execute([$userid]);
-        $row = $stmt->fetch();
-        $count = $stmt->rowCount();
+        $userid = $this->getUserID();
+        // call model class
+        $row = $this->model->editMember($userid);
 
-        if ($count > 0) { ?>
+        if (!empty($row)) { ?>
 
 <h1 class="text-center">Edit Member</h1>
 <div class="container">
@@ -389,28 +325,35 @@ class MembersPage
             // If There's No Such ID Show Error Message
             } else {
                 echo "<div class='container'>";
-
                 $theMsg = '<div class="alert alert-danger">Theres No Such ID</div>';
-
-                redirectHome($theMsg);
-
+                echo '</div>';
+                redirectHome($theMsg, 'back');
                 echo '</div>';
 
-                return $stmt->fetch();
+                return false;
             }
     }
 
     // Update Member Function
-    public function updateMember($userID, $username, $password, $email, $fullName)
+    public function updateMember()
     {
-        $stmt = $this->con->prepare('UPDATE users SET Username = ?, Email = ?, FullName = ?, Password = ? WHERE UserID = ?');
+        echo "<h1 class='text-center'>Update Member</h1>";
+        echo "<div class='container'>";
 
-        $stmt->execute([$username, $email, $fullName, $password, $userID]);
+        $userID = $_POST['userid'];
+        $username = $_POST['username'];
+        $email = $_POST['email'];
+        $fullName = $_POST['full'];
+        $password = empty($_POST['newpassword']) ? $_POST['oldpassword'] : sha1($_POST['newpassword']);
+
+        // Update Member using model class
+        $stmt = $this->model->updateMember($userID, $username, $email, $fullName, $password);
+
         $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
 
         redirectHome($theMsg, 'back');
 
-        return $stmt->rowCount();
+        return true;
     }
 
     // Delete Member Function
@@ -418,11 +361,14 @@ class MembersPage
     {
         echo "<h1 class='text-center'>Delete Member</h1>";
         echo "<div class='container'>";
-        $stmt = $this->con->prepare('DELETE FROM users WHERE UserID = ?');
-        $stmt->execute([$userID]);
+
+        // Delete Member using model class
+        $stmt = $this->model->deleteMember($userID);
         $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
 
-        redirectHome($theMsg);
+        // call model class
+
+        redirectHome($theMsg, 'back');
 
         return $stmt->rowCount();
     }
@@ -432,13 +378,15 @@ class MembersPage
     {
         echo "<h1 class='text-center'>Activate Member</h1>";
         echo "<div class='container'>";
-        $stmt = $this->con->prepare('UPDATE users SET RegStatus = 1 WHERE UserID = ?');
-        $stmt->execute([$userID]);
+
+        // Activate Member using model class
+        $stmt = $this->model->activateMember($userID);
         $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
 
-        redirectHome($theMsg);
+        redirectHome($theMsg, 'back');
 
         return $stmt->rowCount();
     }
-
 }
+$member = new MembersPage($con);
+include $tpl.'footer.php';

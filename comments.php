@@ -5,9 +5,10 @@
 
     */
 
-    ob_start(); // Output Buffering Start
+ob_start(); // Output Buffering Start
 session_start();
 include 'init.php';
+include_once 'model/CommentModel.php';
 $comment = new comment($con);
 include $tpl.'footer.php';
 
@@ -16,17 +17,16 @@ class comment
     private $con;
     private $pageTitle;
     private $do;
+    private $commentmodel;
 
     public function __construct($con)
     {
         $this->con = $con;
         $this->pageTitle = 'Comments';
+        $this->commentmodel = new CommentModel($con);
         $this->run();
-
     }
 
-
-   
     public function run()
     {
         if (isset($_SESSION['Username'])) {
@@ -36,22 +36,22 @@ class comment
                 case 'Manage':
                     $this->manageComment();
                     break;
-    
+
                 case 'Edit':
                     $this->editComment();
                     break;
                 case 'Update':
-         
+
                     $this->updateComment();
-                      break;
-                case 'Delete':
-                  
-                   $this->deleteComment();
                     break;
+                case 'Delete':
+
+                $this->deleteComment();
+                break;
                 case 'Approve':
 
-               $this->approveComment($userid);
-                    break;
+                $this->approveComment();
+                break;
                 default:
                     $this->manageComment();
             }
@@ -63,48 +63,16 @@ class comment
 
     private function manageComment()
     {
-        $query = '';
+        // Select All Comments using commentmodel class
+        $comments = $this->commentmodel->getAllComments();
 
-        if (isset($_GET['page']) && $_GET['page'] == 'Pending') {
-            $query = 'AND RegStatus = 0';
-        }
+        $this->ManageCommentsHTML($comments);
+    }
 
-        // Start Manage Page
-
-       // Manage Members Page
-            // Select All Users Except Admin
-
-            $stmt = $this->con->prepare('SELECT 
-										comments.*, items.Name AS Item_Name, users.Username AS Member  
-									FROM 
-										comments
-									INNER JOIN 
-										items 
-									ON 
-										items.Item_ID = comments.item_id
-									INNER JOIN 
-										users 
-									ON 
-										users.UserID = comments.user_id
-									ORDER BY 
-										c_id DESC');
-
-            // Execute The Statement
-
-            $stmt->execute();
-
-            // Assign To Variable
-
-            $comments = $stmt->fetchAll();
-
-            $this->ManageCommentsHTML($comments);
-        }
-    
-        private function ManageCommentsHTML($comments)
-        {
-
-            if (!empty($comments)) {
-                ?>
+    private function ManageCommentsHTML($comments)
+    {
+        if (!empty($comments)) {
+            ?>
 
 <h1 class="text-center">Manage Comments</h1>
 <div class="container">
@@ -144,47 +112,30 @@ class comment
 </div>
 
 <?php
-            } else {
-                echo '<div class="container">';
-                echo '<div class="nice-message">There\'s No Comments To Show</div>';
-                echo '</div>';
-            } ?>
+        } else {
+            echo '<div class="container">';
+            echo '<div class="nice-message">There\'s No Comments To Show</div>';
+            echo '</div>';
+        } ?>
 
 <?php
-        }
-        
-        private function editComment()
-        {       
-             // Check If Get Request comid Is Numeric & Get Its Integer Value
+    }
 
-             $comid = isset($_GET['comid']) && is_numeric($_GET['comid']) ? intval($_GET['comid']) : 0;
+    private function editComment()
+    {
+        // Check If Get Request comid Is Numeric & Get Its Integer Value
 
-             // Select All Data Depend On This ID
- 
-             $stmt = $this->con->prepare('SELECT * FROM comments WHERE c_id = ?');
- 
-             // Execute Query
- 
-             $stmt->execute([$comid]);
- 
-             // Fetch The Data
- 
-             $row = $stmt->fetch();
- 
-             // The Row Count
- 
-             $count = $stmt->rowCount();
+        $comid = isset($_GET['comid']) && is_numeric($_GET['comid']) ? intval($_GET['comid']) : 0;
 
-            // If There's Such ID Show The Form
+        // Edit Comment using commentmodel class
+        $row = $this->commentmodel->editComment($comid);
 
-            $this->ManageEditHTML($count,$row, $comid);
+        $this->ManageEditHTML($row, $comid);
+    }
 
-
-         }
-          private function ManageEditHTML($count,$row, $comid)
-        {
-
-            if ($count > 0) { ?>
+    private function ManageEditHTML($row, $comid)
+    {
+        if (!empty($row)) { ?>
 
 <h1 class="text-center">Edit Comment</h1>
 <div class="container">
@@ -220,107 +171,97 @@ class comment
 
                 echo '</div>';
             }
+    }
+
+    public function updateComment()
+    {
+        echo "<h1 class='text-center'>Update Comment</h1>";
+        echo "<div class='container'>";
+
+        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+            // Get Variables From The Form
+
+            $comid = $_POST['comid'];
+            $comment = $_POST['comment'];
+
+            // Update The Database With This Info
+            $stmt = $this->commentmodel->updateComment($comid, $comment);
+
+            // Echo Success Message
+
+            $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
+
+            redirectHome($theMsg, 'back');
+        } else {
+            $theMsg = '<div class="alert alert-danger">Sorry You Cant Browse This Page Directly</div>';
+
+            redirectHome($theMsg);
         }
 
-       public function updateComment(){
-        
-     
-            echo "<h1 class='text-center'>Update Comment</h1>";
-            echo "<div class='container'>";
+        echo '</div>';
+    }
 
-            if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-                // Get Variables From The Form
+    public function deleteComment()
+    {
+        echo "<h1 class='text-center'>Delete Comment</h1>";
 
-                $comid = $_POST['comid'];
-                $comment = $_POST['comment'];
+        echo "<div class='container'>";
 
-                // Update The Database With This Info
+        // Check If Get Request comid Is Numeric & Get The Integer Value Of It
 
-                $stmt = $this->con->prepare('UPDATE comments SET comment = ? WHERE c_id = ?');
+        $comid = isset($_GET['comid']) && is_numeric($_GET['comid']) ? intval($_GET['comid']) : 0;
 
-                $stmt->execute([$comment, $comid]);
+        // Select All Data Depend On This ID
 
-                // Echo Success Message
+        $check = checkItem('c_id', 'comments', $comid);
 
-                $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
+        // If There's Such ID Show The Form
 
-                redirectHome($theMsg, 'back');
-            } else {
-                $theMsg = '<div class="alert alert-danger">Sorry You Cant Browse This Page Directly</div>';
+        if ($check > 0) {
+            $stmt = $this->commentmodel->deleteComment($comid);
 
-                redirectHome($theMsg);
-            }
+            $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Deleted</div>';
 
-            echo '</div>';
-        } 
-        public function deleteComment () {
-            echo "<h1 class='text-center'>Delete Comment</h1>";
+            redirectHome($theMsg, 'back');
+        } else {
+            $theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>';
 
-            echo "<div class='container'>";
-
-            // Check If Get Request comid Is Numeric & Get The Integer Value Of It
-
-            $comid = isset($_GET['comid']) && is_numeric($_GET['comid']) ? intval($_GET['comid']) : 0;
-
-            // Select All Data Depend On This ID
-
-            $check = checkItem('c_id', 'comments', $comid);
-
-            // If There's Such ID Show The Form
-
-            if ($check > 0) {
-                $stmt = $this->con->prepare('DELETE FROM comments WHERE c_id = :zid');
-
-                $stmt->bindParam(':zid', $comid);
-
-                $stmt->execute();
-
-                $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Deleted</div>';
-
-                redirectHome($theMsg, 'back');
-            } else {
-                $theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>';
-
-                redirectHome($theMsg);
-            }
-
-            echo '</div>';
-        } 
-        public function  approveComment (){
-            echo "<h1 class='text-center'>Approve Comment</h1>";
-            echo "<div class='container'>";
-
-            // Check If Get Request comid Is Numeric & Get The Integer Value Of It
-
-            $comid = isset($_GET['comid']) && is_numeric($_GET['comid']) ? intval($_GET['comid']) : 0;
-
-            // Select All Data Depend On This ID
-
-            $check = checkItem('c_id', 'comments', $comid);
-
-            // If There's Such ID Show The Form
-
-            if ($check > 0) {
-                $stmt = $this->con->prepare('UPDATE comments SET status = 1 WHERE c_id = ?');
-
-                $stmt->execute([$comid]);
-
-                $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Approved</div>';
-
-                redirectHome($theMsg, 'back');
-            } else {
-                $theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>';
-
-                redirectHome($theMsg);
-            }
-
-            echo '</div>';
+            redirectHome($theMsg);
         }
 
+        echo '</div>';
+    }
 
-    } 
-    
-     
+    public function approveComment()
+    {
+        echo "<h1 class='text-center'>Approve Comment</h1>";
+        echo "<div class='container'>";
+
+        // Check If Get Request comid Is Numeric & Get The Integer Value Of It
+
+        $comid = isset($_GET['comid']) && is_numeric($_GET['comid']) ? intval($_GET['comid']) : 0;
+
+        // Select All Data Depend On This ID
+
+        $check = checkItem('c_id', 'comments', $comid);
+
+        // If There's Such ID Show The Form
+
+        if ($check > 0) {
+            $stmt = $this->commentmodel->approveComment($comid);
+
+            $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Approved</div>';
+
+            redirectHome($theMsg, 'back');
+        } else {
+            $theMsg = '<div class="alert alert-danger">This ID is Not Exist</div>';
+
+            redirectHome($theMsg);
+        }
+
+        echo '</div>';
+    }
+}
 
     ob_end_flush(); // Release The Output
 

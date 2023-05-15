@@ -7,6 +7,7 @@
     ob_start(); // Output Buffering Start
     session_start();
     include 'init.php';
+    include_once 'model/ItemModel.php';
     $item = new item($con);
     include $tpl.'footer.php';
 
@@ -15,21 +16,22 @@
         private $con;
         private $pageTitle;
         private $do;
+        private $model;
+
         public function __construct($con)
         {
             $this->con = $con;
             $this->pageTitle = 'Items';
+            $this->model = new ItemModel($con);
             $this->run();
-
         }
 
-        
-    public function run()
-    {
-        if (isset($_SESSION['Username'])) {
-            $this->do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
+        public function run()
+        {
+            if (isset($_SESSION['Username'])) {
+                $this->do = isset($_GET['do']) ? $_GET['do'] : 'Manage';
 
-            switch ($this->do) {
+                switch ($this->do) {
                 case 'Manage':
                     $this->manageItems();
                     break;
@@ -37,37 +39,15 @@
                     $this->addItem();
                     break;
                 case 'Insert':
-                    if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-                       
-                        $name = $_POST['name'];
-                        $desc = $_POST['description'];
-                        $price = $_POST['price'];
-                        $country = $_POST['country'];
-                        $status = $_POST['status'];
-                        $member = $_POST['member'];
-                        $cat = $_POST['category'];
-                        $tags = $_POST['tags'];
 
-                        $this->insertItem($name, $desc, $price, $country,
-                         $status,$member,$cat,$tags);
-                    }
+                        $this->insertItem();
                     break;
                 case 'Edit':
                     $itemid = isset($_GET['itemid']) && is_numeric($_GET['itemid']) ? intval($_GET['itemid']) : 0;
                     $this->editItem($itemid);
                     break;
                 case 'Update':
-                    $id = $_POST['itemid'];
-                    $name = $_POST['name'];
-                    $desc = $_POST['description'];
-                    $price = $_POST['price'];
-                    $country = $_POST['country'];
-                    $status = $_POST['status'];
-                    $cat = $_POST['category'];
-                    $member = $_POST['member'];
-                    $tags = $_POST['tags'];
-                    $this->updateItem($name, $desc, $price,
-                     $country,$status,$member,$cat,$tags,$id);
+                    $this->updateItem();
                       break;
                 case 'Delete':
                     $itemid = isset($_GET['itemid']) && is_numeric($_GET['itemid']) ? intval($_GET['itemid']) : 0;
@@ -92,49 +72,24 @@
                 default:
                     $this->manageItems();
             }
-        } else {
-            header('Location: login.php');
-            exit();
-        }
-    }
-
-    
-    private function manageItems()
-    {
-        $query = '';
-
-        if (isset($_GET['page']) && $_GET['page'] == 'Pending') {
-            $query = 'AND RegStatus = 0';
+            } else {
+                header('Location: login.php');
+                exit();
+            }
         }
 
-        $stmt = $this->con->prepare('SELECT 
-        items.*, 
-        categories.Name AS category_name, 
-        users.Username 
-    FROM 
-        items
-    INNER JOIN 
-        categories 
-    ON 
-        categories.ID = items.Cat_ID 
-    INNER JOIN 
-        users 
-    ON 
-        users.UserID = items.Member_ID
-    ORDER BY 
-        Item_ID DESC');
+        private function manageItems()
+        {
+            $rows = $this->model->getAllItems();
 
-        $stmt->execute();
-        $rows = $stmt->fetchAll();
+            $this->ManageItemsHTML($rows);
+        }
 
-        $this->ManageItemsHTML($rows);
-    }
+        private function ManageItemsHTML($items)
+        {
+            if (!empty($items)) {
+                ?>
 
-    private function ManageItemsHTML($items)
-    {
-        if (!empty($items)) {
-            ?>
-           
 
 <h1 class="text-center">Manage Items</h1>
 <div class="container">
@@ -191,10 +146,9 @@
             } ?>
 
 <?php
+        }
 
-        } 
-
-private function addItem()
+        private function addItem()
         { ?>
 
 <h1 class="text-center">Add New Item</h1>
@@ -306,131 +260,63 @@ private function addItem()
 
 <?php
 
-        } 
-        public function insertItem($name, $desc, $price, $country, $status,$member,$cat,$tags)
+        }
+
+        private function insertItem()
         {
-                echo "<h1 class='text-center'>Insert Item</h1>";
-                echo "<div class='container'>";
+            echo "<h1 class='text-center'>Insert Item</h1>";
+            echo "<div class='container'>";
+            if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+                $name = $_POST['name'];
+                $desc = $_POST['description'];
+                $price = $_POST['price'];
+                $country = $_POST['country'];
+                $status = $_POST['status'];
+                $member = $_POST['member'];
+                $cat = $_POST['category'];
+                $tags = $_POST['tags'];
 
-                // Get Variables From The Form
+                $stmt = $this->model->insertItem($name, $desc, $price, $country,
+                $status, $member, $cat, $tags);
 
-                $formErrors = $this->validateItemForm($name, $desc, $price, $country, $status,$member,$cat,$tags);
-
-                // Loop Into Errors Array And Echo It
-                if (!empty($formErrors)) {
-                foreach ($formErrors as $error) {
-                    echo '<div class="alert alert-danger">'.$error.'</div>';
-                
-                }
-                return false;
-            }
-
-                // Check If There's No Error Proceed The Update Operation
-
-               // Insert Iteminfo In Database
-
-                    $stmt = $this->con->prepare('INSERT INTO 
-
-						items(Name, Description, Price, Country_Made, Status, Add_Date, Cat_ID, Member_ID, tags)
-
-						VALUES(:zname, :zdesc, :zprice, :zcountry, :zstatus, now(), :zcat, :zmember, :ztags)');
-
-                    $stmt->execute([
-                        'zname' => $name,
-                        'zdesc' => $desc,
-                        'zprice' => $price,
-                        'zcountry' => $country,
-                        'zstatus' => $status,
-                        'zcat' => $cat,
-                        'zmember' => $member,
-                        'ztags' => $tags,
-                    ]);
-                    if ($stmt->rowCount() > 0) {
-
+                if ($stmt->rowCount() > 0) {
                     // Echo Success Message
 
                     $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Inserted</div>';
 
                     redirectHome($theMsg, 'back');
+
                     return true;
+                } else {
+                    echo "<div class='container'>";
+
+                    $theMsg = '<div class="alert alert-danger">Sorry You Cant Browse This Page Directly</div>';
+
+                    redirectHome($theMsg);
+
+                    echo '</div>';
+
+                    return false;
                 }
-             else {
-                
-        
-                echo "<div class='container'>";
-
-                $theMsg = '<div class="alert alert-danger">Sorry You Cant Browse This Page Directly</div>';
-
-                redirectHome($theMsg);
 
                 echo '</div>';
-            return false;
+
+                echo '</div>';
             }
 
-            echo '</div>';
-
-            echo '</div>';
-        } 
-       private function validateItemForm($name, $desc, $price, $country, $status,$member,$cat,$tags){
-                $formErrors=[];
-                // Validate The Form
-
-                if (empty($name)) {
-                    $formErrors[] = 'Name Can\'t be <strong>Empty</strong>';
-                }
-
-                if (empty($desc)) {
-                    $formErrors[] = 'Description Can\'t be <strong>Empty</strong>';
-                }
-
-                if (empty($price)) {
-                    $formErrors[] = 'Price Can\'t be <strong>Empty</strong>';
-                }
-
-                if (empty($country)) {
-                    $formErrors[] = 'Country Can\'t be <strong>Empty</strong>';
-                }
-
-                if ($status == 0) {
-                    $formErrors[] = 'You Must Choose the <strong>Status</strong>';
-                }
-
-                if ($member == 0) {
-                    $formErrors[] = 'You Must Choose the <strong>Member</strong>';
-                }
-
-                if ($cat == 0) {
-                    $formErrors[] = 'You Must Choose the <strong>Category</strong>';
-                }
-
-                return $formErrors;
-
+            return false;
         }
 
-
-        public function editItem($itemid) {
-
-
-
-            // Select All Data Depend On This ID
-
-            $stmt = $this->con->prepare('SELECT * FROM items WHERE Item_ID = ?');
-
-            // Execute Query
-
-            $stmt->execute([$itemid]);
-
-            // Fetch The Data
-
-            $item = $stmt->fetch();
-
-            // The Row Count
-
-            $count = $stmt->rowCount();
-
+        public function editItem($itemid)
+        {
+            $item = $this->model->editItem($itemid);
             // If There's Such ID Show The Form
+            $this->editItemHTML($item);
+        }
 
-            if ($count > 0) { ?>
+        private function editItemHTML($item)
+        {
+            if (!empty($item)) { ?>
 
 <h1 class="text-center">Edit Item</h1>
 <div class="container">
@@ -627,75 +513,52 @@ private function addItem()
 
                 echo '</div>';
             }
+        }
 
-
-        } 
-
-
-
-        public function updateItem($name, $desc, $price,
-        $country,$status,$member,$cat,$tags,$id){
+        private function updateItem()
+        {
+            $id = $_POST['itemid'];
+            $name = $_POST['name'];
+            $desc = $_POST['description'];
+            $price = $_POST['price'];
+            $country = $_POST['country'];
+            $status = $_POST['status'];
+            $cat = $_POST['category'];
+            $member = $_POST['member'];
+            $tags = $_POST['tags'];
 
             echo "<h1 class='text-center'>Update Item</h1>";
             echo "<div class='container'>";
-            $formErrors = $this->validateItemForm($name, $desc, $price, $country, $status,$member,$cat,$tags);
 
-            // Loop Into Errors Array And Echo It
-        if (!empty($formErrors)) {
-            foreach ($formErrors as $error) {
-                echo '<div class="alert alert-danger">'.$error.'</div>';
-            }
-            return false;
-        }
-        
-              
-                    // Update The Database With This Info
+            $stmt = $this->model->updateItem($name, $desc, $price,
+                $country, $status, $member, $cat, $tags, $id);
 
-                    $stmt = $this->con->prepare('UPDATE 
-												items 
-											SET 
-												Name = ?, 
-												Description = ?, 
-												Price = ?, 
-												Country_Made = ?,
-												Status = ?,
-												Cat_ID = ?,
-												Member_ID = ?,
-												tags = ?
-											WHERE 
-												Item_ID = ?');
+            // Echo Success Message
+            if ($stmt->rowCount() > 0) {
+                $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
 
-                    $stmt->execute([$name, $desc, $price, $country, $status, $cat, $member, $tags, $id]);
+                redirectHome($theMsg, 'back');
 
-                    // Echo Success Message
-                    if ($stmt->rowCount() > 0) {
-                    $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
-
-                    redirectHome($theMsg, 'back');
                 return true;
-                    }
-        else {
+            } else {
                 $theMsg = '<div class="alert alert-danger">Sorry You Cant Browse This Page Directly</div>';
                 redirectHome($theMsg);
+
                 return false;
             }
 
             echo '</div>';
         }
-        public function deleteItem($itemid)
+
+        private function deleteItem($itemid)
         {
             echo "<h1 class='text-center'>Delete Item</h1>";
             echo "<div class='container'>";
 
-
             // If There's Such ID Show The Form
+            $stmt = $this->model->deleteItem($itemid);
 
-                $stmt = $this->con->prepare('DELETE FROM items WHERE Item_ID = :zid');
-
-                $stmt->bindParam(':zid', $itemid);
-
-                $stmt->execute();
-                if($stmt->rowCount()>0){
+            if ($stmt->rowCount() > 0) {
                 $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Deleted</div>';
 
                 redirectHome($theMsg, 'back');
@@ -706,30 +569,20 @@ private function addItem()
             }
 
             echo '</div>';
-        } 
-       private function  ApproveItem($itemid) {
+        }
+
+        private function ApproveItem($itemid)
+        {
             echo "<h1 class='text-center'>Approve Item</h1>";
             echo "<div class='container'>";
 
-      
             // If There's Such ID Show The Form
 
-           
-                $stmt = $this->con->prepare('UPDATE items SET Approve = 1 WHERE Item_ID = ?');
+            $stmt = $this->model->ApproveItem($itemid);
+            $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
 
-                $stmt->execute([$itemid]);
-
-                $theMsg = "<div class='alert alert-success'>".$stmt->rowCount().' Record Updated</div>';
-
-                redirectHome($theMsg, 'back');
-          
-
+            redirectHome($theMsg, 'back');
         }
-    
-    
     }
-
-    
-
 
 ?>

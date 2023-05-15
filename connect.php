@@ -22,9 +22,8 @@ class Database
     private $username = 'root';
     private $password = '';
     private $dbname = 'shop';
-    private $options = [
+    private $option = [
         PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8',
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
     ];
 
     protected $con;
