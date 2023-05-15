@@ -135,7 +135,11 @@
         {
             $item = $this->model->editItem($itemid);
             // If There's Such ID Show The Form
-            $this->view->editItemHTML($item);
+            // Select All Users Except Admin
+
+            $rows = $this->model->getAllUser($itemid);
+
+            $this->view->editItemHTML($item, $itemid, $rows);
         }
 
         private function updateItem()

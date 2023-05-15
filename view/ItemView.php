@@ -179,7 +179,7 @@
 
         }
 
-        public function editItemHTML($item)
+        public function editItemHTML($item, $itemid, $rows)
         {
             if (!empty($item)) { ?>
 
@@ -309,27 +309,6 @@
     </form>
 
     <?php
-
-                    // Select All Users Except Admin
-
-                    $stmt = $this->con->prepare('SELECT 
-												comments.*, users.Username AS Member  
-											FROM 
-												comments
-											INNER JOIN 
-												users 
-											ON 
-												users.UserID = comments.user_id
-											WHERE item_id = ?');
-
-                    // Execute The Statement
-
-                    $stmt->execute([$itemid]);
-
-                    // Assign To Variable
-
-                    $rows = $stmt->fetchAll();
-
                     if (!empty($rows)) {
                         ?>
     <h1 class="text-center">Manage [ <?php echo $item['Name']; ?> ] Comments</h1>
@@ -351,8 +330,7 @@
 											<a href='comments.php?do=Edit&comid=".$row['c_id']."' class='btn btn-success'><i class='fa fa-edit'></i> Edit</a>
 											<a href='comments.php?do=Delete&comid=".$row['c_id']."' class='btn btn-danger confirm'><i class='fa fa-close'></i> Delete </a>";
                                     if ($row['status'] == 0) {
-                                        echo "<a href='comments.php?do=Approve&comid="
-                                                         .$row['c_id']."' 
+                                        echo "<a href='comments.php?do=Approve&comid=".$row['c_id']."' 
 														class='btn btn-info activate'>
 														<i class='fa fa-check'></i> Approve</a>";
                                     }

@@ -9,6 +9,29 @@
             $this->con = $con;
         }
 
+        public function getAllUser($itemid)
+        {
+            $stmt = $this->con->prepare('SELECT 
+												comments.*, users.Username AS Member  
+											FROM 
+												comments
+											INNER JOIN 
+												users 
+											ON 
+												users.UserID = comments.user_id
+											WHERE item_id = ?');
+
+            // Execute The Statement
+
+            $stmt->execute([$itemid]);
+
+            // Assign To Variable
+
+            $rows = $stmt->fetchAll();
+
+            return $rows;
+        }
+
         public function getAllItems()
         {
             $query = '';
